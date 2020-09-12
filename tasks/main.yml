@@ -1,0 +1,55 @@
+
+- name: Add cri-o apt key
+  apt_key:
+    url: "{{ item }}"
+  loop:
+    - https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:{{ cri_o_version }}/{{ cri_o_os }}/Release.key
+    - https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{ cri_o_os }}/Release.key
+
+
+- name: Add cri-o apt repository
+  copy:
+    content: |
+      deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/{{ cri_o_version }}/{{ cri_o_os }}/ /
+      deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{ cri_o_os }}/ /
+    dest: /etc/apt/sources.list.d/crio.list
+  register: cri_o_apt_repo_task
+
+- name: apt update
+  apt:
+    update_cache: yes
+  when: cri_o_apt_repo_task.changed
+
+- name: Create cri-o configuration directory
+  file:
+    path: /etc/crio
+    state: directory
+
+- name: Configure cri-o
+  template:
+    src: crio.conf.j2
+    dest: /etc/crio/crio.conf
+  notify:
+    - Restart cri-o service
+
+- name: Install required packages
+  apt:
+    name:
+      - cri-o={{ cri_o_version }}.*
+      - cri-o-runc
+  notify:
+    - Reload systemd configuration
+    - Restart cri-o service
+
+- name: Hold packages
+  command: apt-mark hold cri-o
+  register: command_result
+  changed_when: ("cri-o set on hold." in command_result.stdout)
+
+- meta: flush_handlers
+
+- name: Enable cri-o service
+  service:
+    name: crio
+    enabled: True
+    state: started

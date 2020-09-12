@@ -1,0 +1,10 @@
+---
+- name: Reload systemd configuration
+  service:
+    daemon_reload: True
+
+- name: Restart cri-o service
+  service:
+    name: crio
+    enabled: true
+    state: restarted
